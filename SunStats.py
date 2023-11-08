@@ -70,15 +70,14 @@ class sunPosition():
         Refraction/=3600#pprox Atmospheric Refraction (deg)
         self.Solar_elevation = Solar_elevation+Refraction #Solar Elevation corrected for atm refraction (deg)
 
-        
         self.Azimuth = hour_Angle*0 # Solar Azimuth Angle (deg cw from N)
         self.Azimuth[hour_Angle>0] = (np.degrees(
             np.arccos(((np.sin(np.radians(self.Lat))*np.cos(np.radians(self.Zenith[hour_Angle>0])))-
                                   np.sin(np.radians(self.Declination[hour_Angle>0])))/(np.cos(np.radians(self.Lat))*np.sin(np.radians(self.Zenith[hour_Angle>0]))))
                                   )+180)%360
-        self.Azimuth[hour_Angle<=0] = (np.degrees(
+        self.Azimuth[hour_Angle<=0] = (540-np.degrees(
             np.arccos(((np.sin(np.radians(self.Lat))*np.cos(np.radians(self.Zenith[hour_Angle<=0])))-
                                   np.sin(np.radians(self.Declination[hour_Angle<=0])))/(np.cos(np.radians(self.Lat))*np.sin(np.radians(self.Zenith[hour_Angle<=0]))))
-                                  )+180)%360
+                                  ))%360
 
-
+        self.hour_Angle = hour_Angle
