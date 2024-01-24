@@ -79,5 +79,3 @@ class sunPosition():
             np.arccos(((np.sin(np.radians(self.Lat))*np.cos(np.radians(self.Zenith[hour_Angle<=0])))-
                                   np.sin(np.radians(self.Declination[hour_Angle<=0])))/(np.cos(np.radians(self.Lat))*np.sin(np.radians(self.Zenith[hour_Angle<=0]))))
                                   ))%360
-
-        self.hour_Angle = hour_Angle
