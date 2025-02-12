@@ -10,7 +10,6 @@
 import numpy as np
 
 class sunPosition():
-
     def __init__(self,JD,GMT_offset=0):
         self.tz = GMT_offset
         self.JD = JD-self.tz/24
