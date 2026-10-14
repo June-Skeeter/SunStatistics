@@ -1,9 +1,10 @@
-import sys
 import pytz
 import numpy as np
 import pandas as pd
 from tzfpy import get_tz
 from dataclasses import dataclass, field
+import matplotlib.pyplot as plt
+import datetime
 
 @dataclass
 class TzFuncs():
@@ -24,14 +25,24 @@ class TzFuncs():
         self.TimeZone = pytz.timezone(get_tz(self.Longitude,self.Latitude))
         
     def convert(self,Input_Time,from_UTC=False,to_UTC=False):
-        if isinstance(Input_Time,pd.DatetimeIndex):
-            Input_Time=Input_Time.to_series()
-        if from_UTC == False:
-            self.Local_Time=Input_Time
-            self.to_StandardTime(to_UTC)
+        if self.Timestamp.tz is None:
+            if isinstance(Input_Time,pd.DatetimeIndex):
+                Input_Time=Input_Time.to_series()
+            if from_UTC == False:
+                self.Local_Time=Input_Time
+                self.to_StandardTime(to_UTC)
+            else:
+                self.UTC_Time=Input_Time
+                self.fromUTC()
         else:
-            self.UTC_Time=Input_Time
-            self.fromUTC()
+            if not isinstance(Input_Time,pd.DatetimeIndex):
+                Input_Time=pd.DatetimeIndex(Input_Time)
+            if Input_Time.tz == datetime.timezone.utc:
+                self.UTC_Time = Input_Time
+                self.Local_Time = self.UTC_Time.tz_convert(self.TimeZone)
+            else:
+                self.Local_Time = Input_Time
+                self.UTC_Time = self.Local_Time.tz_convert(pytz.utc)
 
     def to_StandardTime(self,to_UTC=False):
         offset = self.Local_Time.apply(lambda x: self.TimeZone.dst(x,is_dst=self.DST))
@@ -41,12 +52,13 @@ class TzFuncs():
         else:
             self.Standard_Time = pd.DatetimeIndex(self.Local_Time)
             self.Local_Time = (self.Local_Time+offset).apply(lambda x: self.TimeZone.localize(x,is_dst=self.DST))
+        self.Local_Time = pd.DatetimeIndex(self.Local_Time)
         if to_UTC == True:
             self.toUTC()
-        self.Local_Time = pd.DatetimeIndex(self.Local_Time)
 
     def toUTC(self):
-        self.UTC_Time = pd.DatetimeIndex(self.Local_Time.apply(lambda x: x.astimezone(pytz.utc)))
+        # self.UTC_Time = pd.DatetimeIndex(self.Local_Time.apply(lambda x: x.astimezone(pytz.utc)))
+        self.UTC_Time = self.Local_Time.tz_convert(pytz.utc)
 
     def fromUTC(self):
         self.UTC_Time = self.UTC_Time.apply(lambda x: pytz.utc.localize(x, is_dst=self.DST))
@@ -65,7 +77,7 @@ class SunStats(TzFuncs):
     Latitude: float = None
     Longitude: float = None
     Slope: float = 0
-    Aspect: float = 180
+    Aspect: float = 0
     transmissivity: float = 0.85
     Io: float = 1361.0
 
@@ -138,20 +150,28 @@ class SunStats(TzFuncs):
         # Use that to estimate direct irradiance
         # This will ignore diffuse and reflected irradiance, so will give an underestimate of total irradiance
 
+        # Adjust solar constant for planetary distance
+        # Radiative flux normal to solar beam
+        self.Io =self.Io*self.rad_Vector
+
+        # Get SW_in normal to earth's surface at given latitude
+        # Apply transitivity correction and cosine law
+        m = (1/(np.cos(np.radians(self.Zenith))))
+        m[m<0]=np.nan
+        self.SW_in = (self.Io*self.transmissivity**m)*np.cos(np.radians(self.Zenith))
+        self.SW_in[(np.isnan(self.SW_in)|(self.SW_in<0))]=0
+
+        # Get SW_in normal to a sloped surface of given aspect
+        # Apply transitivity correction and cosine law
         alpha = np.radians(self.Slope)
         zeta = np.radians(self.Zenith)
         a = np.radians(self.Azimuth)
         b = np.radians(self.Aspect)
         cosi = np.cos(alpha)*np.cos(zeta)+np.sin(alpha)*np.sin(zeta)*np.cos(a-b)
         self.incidence = np.degrees(np.arccos(cosi))
-        self.I = self.Io*self.rad_Vector*np.cos(np.arccos(cosi))
-        self.I[self.I<0] = 0
-        m = (1/(np.cos(np.radians(self.Zenith))))
-        m[m<0]=np.nan
-        self.SW_in = self.I*self.transmissivity**m
-        self.SW_in[np.isnan(self.SW_in)]=0
-
-
+        self.SW_slope_aspect = (self.Io*self.transmissivity**m)*np.cos(np.arccos(cosi))
+        self.SW_slope_aspect[(np.isnan(self.SW_slope_aspect)|(self.SW_slope_aspect<0))]=0
+    
 @dataclass
 class SolarArray(SunStats):
     # Solar Panel Specs
@@ -163,8 +183,6 @@ class SolarArray(SunStats):
     Panel_Sequences_in_Parallel: int = 3 #	Can wire in parallel to increase amperage
     Degredation_coeff: float = .005 # Assume a continuous % drop / year
     Panel_Age: int = 0
-    Slope: float = 0
-    Bearing: float = 180
 
     # Charger Specs
     Charger_Max_Current:float = 60 # Amps
@@ -227,9 +245,8 @@ class System(BatteryBank):
 
         # Charging        
         # Assume linear decrease in charge efficiency  
-
         # Output of Panels (Watts pre panel x number of panels x efficiency)
-        self.Max_Input_Watts=self.SW_in*self.Panel_Max_Output_coeff
+        self.Max_Input_Watts=self.SW_slope_aspect*self.Panel_Max_Output_coeff
         self.Amps_In = self.Max_Input_Watts/self.Panel_Array_Voltage
         self.Charge_Potential_Watts = self.Amps_In*self.Charger_Voltage
         self.Charge_Balance_Watts = self.Charge_Potential_Watts*0
@@ -256,25 +273,3 @@ class System(BatteryBank):
                 self.System_On += 1
             elif self.System_On == 1:
                 self.Demand = self.Full_Load_Watts
-
-
-
-            # print(self.Supply_pct_Available[i])
-            # print(t)
-
-
-            
-        # # Calculate energy output from charger after voltage conversion
-        # self.Watts_Out = self.Amps_In*self.Charger_Voltage*self.Charging_Efficiency
-        
-        # self.Watts_In_Out = self.Watts_Out-self.Full_Load_Watts
-        # self.Amps_Available = np.ones(self.Watts_In_Out.shape)*self.Supply_Amp_Hours
-        # self.Amps = (self.Watts_In_Out/self.Voltage).cumsum()
-        # for i,a in enumerate(self.Amps):
-        #     self.Amps_Available[i] = min(self.Amps_Available[i]+a,self.Supply_Amp_Hours)
-        
-        # self.PowerSupply = pd.DataFrame(
-        #     index = self.Timestamp,
-        #     data = {'Watts_In_Out':self.Watts_In_Out,
-        #             'Amps_Available':self.Amps_Available}
-        # )
