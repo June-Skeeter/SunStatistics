@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from tzfpy import get_tz
 from dataclasses import dataclass, field
-import matplotlib.pyplot as plt
 import datetime
 
 @dataclass
