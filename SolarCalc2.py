@@ -155,7 +155,9 @@ class SunStats():
                                   np.sin(np.radians(self.Declination[self.hour_Angle<=0])))/(np.cos(np.radians(self.Latitude))*np.sin(np.radians(self.Zenith[self.hour_Angle<=0]))))
                                   ))%360
 
-    def fluxDensity(self):
+    def fluxDensity(self,transmissivity=None):
+        if transmissivity is not None:
+            self.transmissivity = transmissivity
         # Get incident angle on surface, amounting for slope and bearing
         # Use that to estimate direct irradiance
         # This will ignore diffuse and reflected irradiance, so will give an underestimate of total irradiance
@@ -181,6 +183,7 @@ class SunStats():
         self.incidence = np.degrees(np.arccos(cosi))
         self.SW_slope_aspect = (self.Io*self.transmissivity**m)*np.cos(np.arccos(cosi))
         self.SW_slope_aspect[(np.isnan(self.SW_slope_aspect)|(self.SW_slope_aspect<0))]=0
+        return(self.SW_slope_aspect)
     
 @dataclass
 class SolarArray(SunStats):
