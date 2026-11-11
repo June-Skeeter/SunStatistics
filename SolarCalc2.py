@@ -133,7 +133,7 @@ class SunStats():
         self.Sunrise_LST = (self.Noon_LST*1440-self.HA_sunrise*4)/1440 #Sunrise Time (LST)
         self.Sunset_LST = (self.Noon_LST*1440+self.HA_sunrise*4)/1440 #Sunset Time (LST)
         self.Day_Length=8*self.HA_sunrise #Sunlight Duration (minutes)
-        self.Solar_Time=(self.TIME*1440+self.eq_Time+4*self.Longitude-60)%1440 # True Solar Time (min)
+        self.Solar_Time=(self.TIME*1440+self.eq_Time+4*self.Longitude)%1440 # True Solar Time (min)
         self.hour_Angle = np.copy(self.Solar_Time)
         self.hour_Angle[self.Solar_Time/4<0] = self.Solar_Time[self.Solar_Time/4<0]/4+180
         self.hour_Angle[self.Solar_Time/4>0] = self.Solar_Time[self.Solar_Time/4>0]/4-180
@@ -253,7 +253,7 @@ class System(BatteryBank):
             self.Full_Load_Watts = sum(self.Full_Load_Watts)
         elif type(self.Full_Load_Watts) is np.ndarray:
             self.Full_Load_Watts = self.Full_Load_Watts.sum()
-        self.Demand = self.Full_Load_Watts#.copy()
+        self.Demand = self.Full_Load_Watts
         super().__post_init__()
 
         # Charging        
